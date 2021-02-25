@@ -99,6 +99,15 @@ cCamera* camera;
 // a light source to illuminate the objects in the world
 cDirectionalLight *light;
 
+// a haptic device handler
+cHapticDeviceHandler* handler;
+
+// a pointer to the current haptic device
+cGenericHapticDevicePtr hapticDevice;
+
+// a virtual tool representing the haptic device in the scene
+cToolCursor* tool;
+
 // some objects
 cMesh* mesh;
 cShapeSphere* sphere;
@@ -165,6 +174,8 @@ cFrequencyCounter freqCounterGraphics;
 // a frequency counter to measure the simulation haptic rate
 cFrequencyCounter freqCounterHaptics;
 
+// haptic thread
+cThread* hapticsThread;
 
 // a handle to window display context
 GLFWwindow* window = NULL;
@@ -200,6 +211,9 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY);
 
 // this function renders the scene
 void updateGraphics(void);
+
+// this function contains the main haptics simulation loop
+void updateHaptics(void);
 
 // this function closes the application
 void close(void);
@@ -363,6 +377,48 @@ int main(int argc, char* argv[])
 	light->setDir(-2.5, -0.8, 0.0);
 
 
+	//--------------------------------------------------------------------------
+	// HAPTIC DEVICES / TOOLS
+	//--------------------------------------------------------------------------
+
+	// create a haptic device handler
+	handler = new cHapticDeviceHandler();
+
+	// get access to the first available haptic device
+	handler->getDevice(hapticDevice, 0);
+
+	// retrieve information about the current haptic device
+	cHapticDeviceInfo hapticDeviceInfo = hapticDevice->getSpecifications();
+
+	// if the haptic devices carries a gripper, enable it to behave like a user switch
+	hapticDevice->setEnableGripperUserSwitch(true);
+
+	// create a tool (cursor) and insert into the world
+	tool = new cToolCursor(world);
+	world->addChild(tool);
+
+	// connect the haptic device to the tool
+	tool->setHapticDevice(hapticDevice);
+
+	// map the physical workspace of the haptic device to a larger virtual workspace.
+	tool->setWorkspaceRadius(0.9);
+
+	// define the radius of the tool (sphere)
+	double toolRadius = 0.01;
+
+	// define a radius for the tool
+	tool->setRadius(toolRadius);
+
+	// hide the device sphere. only show proxy.
+	tool->setShowContactPoints(true, false);
+
+	// enable if objects in the scene are going to rotate of translate
+	// or possibly collide against the tool. If the environment
+	// is entirely static, you can set this parameter to "false"
+	tool->enableDynamicObjects(true);
+
+	// start the haptic tool
+	tool->start();
 
 	//--------------------------------------------------------------------------
 	// CREATE OBJECTS
@@ -370,10 +426,10 @@ int main(int argc, char* argv[])
 
 	// read the scale factor between the physical workspace of the haptic
 	// device and the virtual workspace defined for the tool
-	//double workspaceScaleFactor = tool->getWorkspaceScaleFactor();
+	double workspaceScaleFactor = tool->getWorkspaceScaleFactor();
 
 	// stiffness properties
-	//double maxStiffness = hapticDeviceInfo.m_maxLinearStiffness / workspaceScaleFactor;
+	double maxStiffness = hapticDeviceInfo.m_maxLinearStiffness / workspaceScaleFactor;
 
 	// create a small sphere to display a selection hit with the mouse
 	sphereSelect = new cShapeSphere(0.005);
@@ -389,7 +445,39 @@ int main(int argc, char* argv[])
 	normalSelect->setShowEnabled(false);
 	normalSelect->setGhostEnabled(true);
 
+	////////////////////////////////////////////////////////////////////////////
+	// SHAPE - SPHERE
+	////////////////////////////////////////////////////////////////////////////
 
+	sphere = new cShapeSphere(0.06);
+	world->addChild(sphere);
+	sphere->setLocalPos(0.0, 0.0, 0.0);
+	sphere->createEffectSurface();
+	sphere->m_material->setStiffness(0.8 * maxStiffness);
+	sphere->m_material->setGrayLight();
+
+	////////////////////////////////////////////////////////////////////////////
+	// SHAPE - SPHERE2
+	////////////////////////////////////////////////////////////////////////////
+
+	sphere = new cShapeSphere(0.1);
+	world->addChild(sphere);
+	sphere->setLocalPos(0.0, 0.0, 0.15);
+	sphere->createEffectSurface();
+	sphere->m_material->setStiffness(0.8 * maxStiffness);
+	sphere->m_material->setGrayLight();
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// SHAPE - SPHERE3
+	////////////////////////////////////////////////////////////////////////////
+
+	sphere = new cShapeSphere(0.2);
+	world->addChild(sphere);
+	sphere->setLocalPos(0.0, 0.0, 0.35);
+	sphere->createEffectSurface();
+	sphere->m_material->setStiffness(0.8 * maxStiffness);
+	sphere->m_material->setGrayLight();
 
 	//--------------------------------------------------------------------------
 	// WIDGETS
@@ -411,9 +499,9 @@ int main(int argc, char* argv[])
 
 	// set background properties
 	background->setCornerColors(cColorf(1.0, 1.0, 1.0),
-		cColorf(1.0, 1.0, 1.0),
-		cColorf(0.8, 0.8, 0.8),
-		cColorf(0.8, 0.8, 0.8));
+								cColorf(1.0, 1.0, 1.0),
+								cColorf(0.8, 0.8, 0.8),
+								cColorf(0.8, 0.8, 0.8));
 
 	// a widget panel
 	panel = new cPanel();
@@ -463,6 +551,17 @@ int main(int argc, char* argv[])
 	// set text message
 	labelMessage->setText("use mouse to select and move objects");
 
+
+	//--------------------------------------------------------------------------
+	// START SIMULATION
+	//--------------------------------------------------------------------------
+
+	// create a thread which starts the main haptics rendering loop
+	hapticsThread = new cThread();
+	hapticsThread->start(updateHaptics, CTHREAD_PRIORITY_HAPTICS);
+
+	// setup callback when application exits
+	atexit(close);
 
 	//--------------------------------------------------------------------------
 	// MAIN GRAPHIC LOOP
@@ -677,8 +776,6 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 		// compute the angle between both vectors
 		double angle = cAngle(vCameraObject, vCameraLookAt);
 
-
-
 		// compute the distance between the camera and the plane that intersects the object and 
 		// which is parallel to the camera plane
 		double distanceToObjectPlane = vCameraObject.length() * cos(angle);
@@ -688,9 +785,7 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 		double posRelX = factor * (a_posX - (0.5 * width));
 		double posRelY = factor * ((height - a_posY) - (0.5 * height));
 
-		cVector3d posOffset(0.0, 0.5, 0.5);
-
-
+		//cVector3d posOffset(0.0, 0.5, 0.5);
 
 		// compute the new position in world coordinates
 		cVector3d pos = camera->getLocalPos() +
@@ -719,7 +814,13 @@ void close(void)
 	// wait for graphics and haptics loops to terminate
 	while (!simulationFinished) { cSleepMs(100); }
 
+	// close haptic device
+	hapticDevice->close();
+
+	// delete resources
+	delete hapticsThread;
 	delete world;
+	delete handler;
 }
 
 //------------------------------------------------------------------------------
@@ -745,7 +846,6 @@ void updateGraphics(void)
 	// update shadow maps (if any)
 	world->updateShadowMaps(false, mirroredDisplay);
 
-
 	// render world
 	camera->renderView(width, height);
 
@@ -756,6 +856,41 @@ void updateGraphics(void)
 	GLenum err;
 	err = glGetError();
 	if (err != GL_NO_ERROR) cout << "Error:  %s\n" << gluErrorString(err);
+}
+
+//------------------------------------------------------------------------------
+
+void updateHaptics(void)
+{
+	// simulation in now running
+	simulationRunning = true;
+	simulationFinished = false;
+
+	// main haptic simulation loop
+	while (simulationRunning)
+	{
+		/////////////////////////////////////////////////////////////////////////
+		// HAPTIC RENDERING
+		/////////////////////////////////////////////////////////////////////////
+
+		// signal frequency counter
+		freqCounterHaptics.signal(1);
+
+		// compute global reference frames for each object
+		world->computeGlobalPositions(true);
+
+		// update position and orientation of tool
+		tool->updateFromDevice();
+
+		// compute interaction forces
+		tool->computeInteractionForces();
+
+		// send forces to haptic device
+		tool->applyToDevice();
+	}
+
+	// exit haptics thread
+	simulationFinished = true;
 }
 
 //------------------------------------------------------------------------------
