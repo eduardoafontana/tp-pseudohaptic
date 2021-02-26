@@ -782,10 +782,12 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 
 		// convert the pixel in mouse space into a relative position in the world
 		double factor = (distanceToObjectPlane * tan(0.5 * camera->getFieldViewAngleRad())) / (0.5 * height);
-		double posRelX = factor * (a_posX - (0.5 * width));
-		double posRelY = factor * ((height - a_posY) - (0.5 * height));
 
-		//cVector3d posOffset(0.0, 0.5, 0.5);
+		double calibration = 0.1;
+		double factorWithResistance = factor / ((cShapeSphere*)selectedObject)->getRadius() * calibration;
+
+		double posRelX = factorWithResistance * (a_posX - (0.5 * width));
+		double posRelY = factorWithResistance * ((height - a_posY) - (0.5 * height));
 
 		// compute the new position in world coordinates
 		cVector3d pos = camera->getLocalPos() +
