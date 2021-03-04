@@ -118,6 +118,8 @@ cShapeTorus* torus;
 cShapeLine* line1;
 cShapeLine* line2;
 
+cShapeSphere* shapeBox;
+
 // a small sphere which displays the position of a click hit in the world
 cShapeSphere* sphereSelect;
 
@@ -164,6 +166,8 @@ bool simulationFinished = true;
 
 // mouse position
 double mouseX, mouseY;
+
+double mouseXposMotion, mouseYposMotion;
 
 // mouse state
 MouseState mouseState = MOUSE_IDLE;
@@ -479,6 +483,14 @@ int main(int argc, char* argv[])
 	sphere->m_material->setStiffness(0.8 * maxStiffness);
 	sphere->m_material->setGrayLight();
 
+	shapeBox = new cShapeSphere(0.1);
+	world->addChild(shapeBox);
+	shapeBox->setLocalPos(-1, 1.5, 0.0);
+	shapeBox->createEffectSurface();
+	shapeBox->m_material->setStiffness(0.8 * maxStiffness);
+	shapeBox->m_material->setGrayLight();
+	shapeBox->m_material->setBlue();
+
 	//--------------------------------------------------------------------------
 	// WIDGETS
 	//--------------------------------------------------------------------------
@@ -747,9 +759,11 @@ void mouseButtonCallback(GLFWwindow* a_window, int a_button, int a_action, int a
 				normalSelect->m_pointB = 0.1 * recorder.m_nearestCollision.m_globalNormal;
 				selectedObject = recorder.m_nearestCollision.m_object;
 
+				if (selectedObject == shapeBox)
+					return;
+
 				selectedObjectOffset = recorder.m_nearestCollision.m_globalPos - selectedObject->getLocalPos();
 				mouseState = MOUSE_SELECTION;
-
 			}
 
 		}
@@ -766,7 +780,6 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 {
 	if ((selectedObject != NULL) && (mouseState == MOUSE_SELECTION))
 	{
-
 		// get the vector that goes from the camera to the selected point (mouse click)
 		cVector3d vCameraObject = selectedPoint - camera->getLocalPos();
 
@@ -804,6 +817,9 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 		// place cursor at the position of the mouse click
 		sphereSelect->setLocalPos(pos);
 	}
+
+	mouseXposMotion = a_posX;
+	mouseYposMotion = a_posY;
 }
 
 //------------------------------------------------------------------------------
@@ -829,6 +845,22 @@ void close(void)
 
 void updateGraphics(void)
 {
+	cVector3d shapePosition = shapeBox->getLocalPos();
+
+	if (shapePosition.x() > 0.75)
+		shapeBox->setLocalPos(-1, 1.5, 0.0);
+
+	cCollisionRecorder recorder;
+	cCollisionSettings settings;
+
+	camera->selectWorld(mouseXposMotion, (height - mouseYposMotion), width, height, recorder, settings);
+
+	cGenericObject* selectedShapeBox = recorder.m_nearestCollision.m_object;
+
+	if (selectedShapeBox == shapeBox)
+		shapeBox->translate(0.001, -0.001, 0);
+	else
+		shapeBox->translate(0.003, -0.003, 0);
 
 	/////////////////////////////////////////////////////////////////////
 	// UPDATE WIDGETS
