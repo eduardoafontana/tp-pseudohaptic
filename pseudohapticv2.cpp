@@ -110,8 +110,6 @@ cToolCursor* tool;
 
 // some objects
 cMesh* mesh;
-cShapeSphere* sphere;
-cShapeSphere* sphere2;
 cShapeBox* box;
 cShapeCylinder* cylinder;
 cShapeTorus* torus;
@@ -144,19 +142,6 @@ cFontPtr font;
 
 // a label to display the rate [Hz] at which the simulation is running
 cLabel* labelRates;
-
-// a label to explain what is happening
-cLabel* labelMessage;
-
-// a widget panel
-cPanel* panel;
-
-// some labels
-cLabel* labelRed;
-cLabel* labelGreen;
-cLabel* labelBlue;
-cLabel* labelOrange;
-cLabel* labelGray;
 
 // a flag to indicate if the haptic simulation currently running
 bool simulationRunning = false;
@@ -449,40 +434,6 @@ int main(int argc, char* argv[])
 	normalSelect->setShowEnabled(false);
 	normalSelect->setGhostEnabled(true);
 
-	////////////////////////////////////////////////////////////////////////////
-	// SHAPE - SPHERE
-	////////////////////////////////////////////////////////////////////////////
-
-	sphere = new cShapeSphere(0.06);
-	world->addChild(sphere);
-	sphere->setLocalPos(0.0, 0.0, 0.0);
-	sphere->createEffectSurface();
-	sphere->m_material->setStiffness(0.8 * maxStiffness);
-	sphere->m_material->setGrayLight();
-
-	////////////////////////////////////////////////////////////////////////////
-	// SHAPE - SPHERE2
-	////////////////////////////////////////////////////////////////////////////
-
-	sphere = new cShapeSphere(0.1);
-	world->addChild(sphere);
-	sphere->setLocalPos(0.0, 0.0, 0.15);
-	sphere->createEffectSurface();
-	sphere->m_material->setStiffness(0.8 * maxStiffness);
-	sphere->m_material->setGrayLight();
-
-
-	////////////////////////////////////////////////////////////////////////////
-	// SHAPE - SPHERE3
-	////////////////////////////////////////////////////////////////////////////
-
-	sphere = new cShapeSphere(0.2);
-	world->addChild(sphere);
-	sphere->setLocalPos(0.0, 0.0, 0.35);
-	sphere->createEffectSurface();
-	sphere->m_material->setStiffness(0.8 * maxStiffness);
-	sphere->m_material->setGrayLight();
-
 	shapeBox = new cShapeSphere(0.1);
 	world->addChild(shapeBox);
 	shapeBox->setLocalPos(-1, 1.5, 0.0);
@@ -514,55 +465,6 @@ int main(int argc, char* argv[])
 								cColorf(1.0, 1.0, 1.0),
 								cColorf(0.8, 0.8, 0.8),
 								cColorf(0.8, 0.8, 0.8));
-
-	// a widget panel
-	panel = new cPanel();
-	camera->m_frontLayer->addChild(panel);
-	panel->setSize(100, 115);
-	panel->m_material->setGrayDim();
-	panel->setTransparencyLevel(0.8);
-
-	// create some labels
-	labelRed = new cLabel(font);
-	panel->addChild(labelRed);
-	labelRed->setText("red");
-	labelRed->setLocalPos(15, 10, 0.1);
-	labelRed->m_fontColor.setWhite();
-
-	labelGreen = new cLabel(font);
-	panel->addChild(labelGreen);
-	labelGreen->setText("green");
-	labelGreen->setLocalPos(15, 30, 0.1);
-	labelGreen->m_fontColor.setWhite();
-
-	labelBlue = new cLabel(font);
-	panel->addChild(labelBlue);
-	labelBlue->setText("blue");
-	labelBlue->setLocalPos(15, 50, 0.1);
-	labelBlue->m_fontColor.setWhite();
-
-	labelOrange = new cLabel(font);
-	panel->addChild(labelOrange);
-	labelOrange->setText("orange");
-	labelOrange->setLocalPos(15, 70, 0.1);
-	labelOrange->m_fontColor.setWhite();
-
-	labelGray = new cLabel(font);
-	panel->addChild(labelGray);
-	labelGray->setText("gray");
-	labelGray->setLocalPos(15, 90, 0.1);
-	labelGray->m_fontColor.setWhite();
-
-	// create a label with a small message
-	labelMessage = new cLabel(font);
-	camera->m_frontLayer->addChild(labelMessage);
-
-	// set font color
-	labelMessage->m_fontColor.setBlack();
-
-	// set text message
-	labelMessage->setText("use mouse to select and move objects");
-
 
 	//--------------------------------------------------------------------------
 	// START SIMULATION
@@ -618,12 +520,6 @@ void windowSizeCallback(GLFWwindow* a_window, int a_width, int a_height)
 	// update window size
 	width = a_width;
 	height = a_height;
-
-	// update panel position
-	panel->setLocalPos(10, (height - panel->getHeight()) - 10);
-
-	// update position of label
-	labelMessage->setLocalPos((int)(0.5 * (width - labelMessage->getWidth())), 40);
 }
 
 //------------------------------------------------------------------------------
@@ -695,78 +591,6 @@ void mouseButtonCallback(GLFWwindow* a_window, int a_button, int a_action, int a
 	{
 		// store mouse position
 		glfwGetCursorPos(window, &mouseX, &mouseY);
-
-
-		// variable for storing collision information
-		cCollisionRecorder recorder;
-		cCollisionSettings settings;
-
-		// detect for any collision between mouse and front layer widgets
-		bool hit = camera->selectFrontLayer(mouseX, (height - mouseY), width, height, recorder, settings);
-		if (hit)
-		{
-			// reset all label font colors to white
-			labelRed->m_fontColor.setWhite();
-			labelGreen->m_fontColor.setWhite();
-			labelBlue->m_fontColor.setWhite();
-			labelOrange->m_fontColor.setWhite();
-			labelGray->m_fontColor.setWhite();
-
-			// check mouse selection
-			if (recorder.m_nearestCollision.m_object == labelRed)
-			{
-				labelRed->m_fontColor.setBlack();
-				if (selectedObject != NULL)
-					selectedObject->m_material->setRedCrimson();
-
-			}
-			else if (recorder.m_nearestCollision.m_object == labelGreen)
-			{
-				labelGreen->m_fontColor.setBlack();
-				if (selectedObject != NULL)
-					selectedObject->m_material->setGreenLightSea();
-			}
-			else if (recorder.m_nearestCollision.m_object == labelBlue)
-			{
-				labelBlue->m_fontColor.setBlack();
-				if (selectedObject != NULL)
-					selectedObject->m_material->setBlueCornflower();
-			}
-			else if (recorder.m_nearestCollision.m_object == labelOrange)
-			{
-				labelOrange->m_fontColor.setBlack();
-				if (selectedObject != NULL)
-					selectedObject->m_material->setOrangeRed();
-			}
-			else if (recorder.m_nearestCollision.m_object == labelGray)
-			{
-				labelGray->m_fontColor.setBlack();
-				if (selectedObject != NULL)
-					selectedObject->m_material->setGrayLight();
-			}
-		}
-		else
-		{
-			// detect for any collision between mouse and world
-			bool hit = camera->selectWorld(mouseX, (height - mouseY), width, height, recorder, settings);
-			if (hit)
-			{
-				sphereSelect->setShowEnabled(true);
-				normalSelect->setShowEnabled(true);
-				selectedPoint = recorder.m_nearestCollision.m_globalPos;
-				sphereSelect->setLocalPos(selectedPoint);
-				normalSelect->m_pointA.zero();
-				normalSelect->m_pointB = 0.1 * recorder.m_nearestCollision.m_globalNormal;
-				selectedObject = recorder.m_nearestCollision.m_object;
-
-				if (selectedObject == shapeBox)
-					return;
-
-				selectedObjectOffset = recorder.m_nearestCollision.m_globalPos - selectedObject->getLocalPos();
-				mouseState = MOUSE_SELECTION;
-			}
-
-		}
 	}
 	else
 	{
@@ -795,12 +619,8 @@ void mouseMotionCallback(GLFWwindow* a_window, double a_posX, double a_posY)
 
 		// convert the pixel in mouse space into a relative position in the world
 		double factor = (distanceToObjectPlane * tan(0.5 * camera->getFieldViewAngleRad())) / (0.5 * height);
-
-		double calibration = 0.1;
-		double factorWithResistance = factor / ((cShapeSphere*)selectedObject)->getRadius() * calibration;
-
-		double posRelX = factorWithResistance * (a_posX - (0.5 * width));
-		double posRelY = factorWithResistance * ((height - a_posY) - (0.5 * height));
+		double posRelX = factor * (a_posX - (0.5 * width));
+		double posRelY = factor * ((height - a_posY) - (0.5 * height));
 
 		// compute the new position in world coordinates
 		cVector3d pos = camera->getLocalPos() +
